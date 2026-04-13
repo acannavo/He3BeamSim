@@ -2,27 +2,40 @@
 
 ## Physics problem
 
-A 6 MeV ³He beam (diameter **0.8 cm**, uniform disk) passes through:
-1. A **1 µm Si₃N₄** (silicon nitride) window
-2. **1 m of vacuum**
+A 6 MeV ³He beam passes through:
+1. A **Si₃N₄** (silicon nitride) entrance window
+2. A **He-4 gas volume** at configurable pressure
+3. A **vacuum/gas drift** to a scoring plane
 
-The simulation records the transverse beam profile at the scoring plane
-(z = 1 m after the window) and reports σ_x, σ_y, FWHM, and containment radii.
+All geometry parameters — beam size, foil dimensions, gas pressure, drift distance, and scorer size — are controlled from a single plain-text configuration file (`sim.conf`) with no recompilation required.
 
-The dominant broadening mechanism is **Coulomb multiple scattering** in the
-Si₃N₄ foil.  The Highland formula gives a rough analytical estimate:
+The dominant broadening mechanism is **Coulomb multiple scattering** in the Si₃N₄ foil, with additional (typically small) scattering in the He-4 gas depending on pressure and drift length.
 
-    θ₀ = (13.6 MeV / βcp) · z · √(x/X₀) · [1 + 0.038 ln(x/X₀)]
+---
 
-For 6 MeV ³He (Z=2, A=3):
-  - βcp ≈ 110 MeV (relativistic momentum × velocity for a 6 MeV He-3)
-  - x/X₀ for 1 µm Si₃N₄ ≈ 9.35e-6 / 65.5e-3 ≈ 1.43e-4  (density 3.17 g/cm³, X₀ ≈ 65 mm)
-  - θ₀ ≈ (13.6 × 2 / 110) × √(1.43e-4) ≈ 0.00132 rad ≈ 1.32 mrad
+## Configuration file
 
-After 1 m drift:  Δr ≈ θ₀ × 1 m ≈ 1.3 mm (1σ broadening added in quadrature)
+All geometry and physics parameters are set in `sim.conf`, located in the project root:
 
-The Geant4 simulation computes this rigorously, including the full
-angular distribution (not just the Gaussian core).
+```
+# He3BeamSim configuration file
+#
+BeamD   =   20.0    # beam diameter          (mm)
+FoilD   =   30.0    # Si3N4 foil diameter    (mm)  — must be ≥ BeamD
+FoilT   =    1.0    # Si3N4 foil thickness   (um)
+PipeD   =   60.0    # He4 gas pipe diameter  (mm)
+Dist    =  500.0    # foil-to-scorer distance (mm)
+ScorerD =  200.0    # scorer diameter        (mm)
+GasPres =    5.0    # He4 gas pressure       (Torr)
+```
+
+**Key rules:**
+- `FoilD` must be ≥ `BeamD` — if the beam is wider than the foil, particles outside the foil skip scattering and a hollow ring appears at the scorer.
+- `PipeD` sets the radius of the He-4 gas cylinder between foil and scorer. Particles outside this radius travel through vacuum.
+- `ScorerD` is independent of `PipeD` — the scorer can be wider than the gas tube to catch scattered particles.
+- `GasPres` sets the He-4 pressure in Torr. The gas density is computed automatically from the ideal gas law at 293 K.
+
+Edit `sim.conf` and re-run — no recompilation needed.
 
 ---
 
@@ -32,10 +45,13 @@ angular distribution (not just the Gaussian core).
 He3BeamSim/
 ├── CMakeLists.txt
 ├── He3BeamSim.cc               ← main driver
+├── sim.conf                    ← geometry & physics parameters
 ├── run.mac                     ← batch macro (100 000 events)
 ├── vis.mac                     ← interactive visualisation macro
+├── init_vis.mac                ← default geometry for interactive mode
 ├── plot_beam_profile.py        ← Python post-processing & plots
 ├── include/
+│   ├── SimConfig.hh            ← config file reader (singleton)
 │   ├── DetectorConstruction.hh
 │   ├── PrimaryGeneratorAction.hh
 │   ├── ActionInitialization.hh
@@ -43,6 +59,7 @@ He3BeamSim/
 │   ├── EventAction.hh
 │   └── SteppingAction.hh
 └── src/
+    ├── SimConfig.cc
     ├── DetectorConstruction.cc
     ├── PrimaryGeneratorAction.cc
     ├── ActionInitialization.cc
@@ -55,29 +72,22 @@ He3BeamSim/
 
 ## Requirements
 
-- **Geant4 ≥ 10.7** (tested with 10.7, 11.x)
+- **Geant4 11.2** (tested with 11.2.2)
 - CMake ≥ 3.16
-- C++17 compiler (gcc ≥ 9, clang ≥ 10)
-- ROOT (optional but recommended — for `.root` histogram output)
+- C++17 compiler (gcc ≥ 9)
+- ROOT (required — for `.root` histogram and PNG output)
 - Python 3 + numpy + matplotlib + scipy (for `plot_beam_profile.py`)
-  - If ROOT output: also install `uproot`
 
 ---
 
 ## Build
 
 ```bash
-# 1. Source your Geant4 environment
 source /path/to/geant4/install/bin/geant4.sh
-# or on some systems:
-# source /path/to/geant4/install/share/Geant4-*/geant4make/geant4make.sh
 
-# 2. Configure
 cd He3BeamSim
 mkdir build && cd build
 cmake ..
-
-# 3. Compile
 make -j$(nproc)
 ```
 
@@ -85,38 +95,61 @@ make -j$(nproc)
 
 ## Run
 
-### Batch mode (recommended, 100 000 events ≈ 1–5 min)
+### Batch mode (100 000 events)
 
 ```bash
 cd build
 ./He3BeamSim ../run.mac
 ```
 
-Output printed to console:
+Console output:
+
 ```
-======================================================
-  He-3  6 MeV  |  1 µm Si3N4  +  1 m vacuum
-  Beam profile at scoring plane (z = 1 m)
-  Events processed: 100000
-------------------------------------------------------
-  Mean X     :   -0.0012 mm
-  Sigma X    :    4.1523 mm
-  FWHM  X    :    9.7784 mm
-  Mean Y     :    0.0008 mm
-  Sigma Y    :    4.1490 mm
-  FWHM  Y    :    9.7707 mm
-  Mean R     :    5.2814 mm
-  RMS  R     :    1.9801 mm
-------------------------------------------------------
-  Initial beam radius (hard edge): 4.000 mm
-======================================================
+============================================
+  He-3 Beam Broadening — Results
+============================================
+  Events: 100000   Hits: 99847
+
+  Beam profile at scorer (z = 500 mm)
+  ------------------------------------------
+  Mean  (x,y)       : (-0.001, 0.002) mm
+  Sigma_x           : 5.955 mm
+  Sigma_y           : 5.948 mm
+  FWHM_x            : 14.021 mm
+  FWHM_y            : 14.005 mm
+  Mean radius       : 6.624 mm
+  RMS  radius       : 8.494 mm
+  90% containment R : 9.412 mm
+  95% containment R : 10.871 mm
+  ------------------------------------------
+  Mean KE at scorer : 5.839 MeV
+  Energy loss       : 0.161 MeV
+============================================
 ```
-*(Numbers above are illustrative; your exact results depend on Geant4 version and random seed.)*
+
+Output files written to the `build/` directory:
+- `He3BeamSim.root` — ROOT file with histograms and TTree
+- `plot_xy.png` — 2D transverse beam profile
+- `plot_r.png` — radial distribution
+- `plot_x.png`, `plot_y.png` — x and y projections
+- `plot_energy.png` — kinetic energy distribution at scorer
+- `hits_scoring_plane.csv` — per-hit (x, y, r, E) data
 
 ### Interactive / visualisation mode
 
 ```bash
-./He3BeamSim          # opens Qt or X11 viewer
+# Opens Qt window with geometry pre-loaded
+./He3BeamSim
+
+# Runs vis.mac then keeps window open for interactive commands
+./He3BeamSim ../vis.mac
+```
+
+In the interactive terminal, type Geant4 commands such as:
+```
+/run/beamOn 500
+/vis/viewer/set/viewpointThetaPhi 90 0
+exit
 ```
 
 ---
@@ -124,17 +157,12 @@ Output printed to console:
 ## Post-processing
 
 ```bash
-# With ROOT output
-python3 ../plot_beam_profile.py He3Beam.root
+# Python plots from CSV (no ROOT needed)
+python3 ../plot_beam_profile.py hits_scoring_plane.csv
 
-# With CSV output (if Geant4 built without ROOT)
-python3 ../plot_beam_profile.py He3Beam_hits.csv
+# Python plots from ROOT file
+python3 ../plot_beam_profile.py He3BeamSim.root
 ```
-
-Produces three PNG files:
-- `beam_profile_xy.png`   — 2D hexbin transverse profile
-- `beam_profile_r.png`    — radial distribution + 90% containment circle
-- `beam_profile_proj.png` — x and y projections with Gaussian fits
 
 ---
 
@@ -142,50 +170,62 @@ Produces three PNG files:
 
 ### Geometry
 
-| Component      | Material | Thickness | Position        |
-|----------------|----------|-----------|-----------------|
-| World volume   | Vacuum   | 120 cm    | tube, R=5 cm    |
-| Si₃N₄ window  | Si₃N₄    | 1 µm      | z = 0           |
-| Drift region   | Vacuum   | 1 m       | z = 0 → 1 m     |
-| Scoring plane  | Si (thin)| 1 µm      | z = 1 m         |
+| Component      | Material    | Dimensions                  | Position        |
+|----------------|-------------|-----------------------------|-----------------|
+| World          | Vacuum      | radius = max(PipeD, ScorerD)/2 + 1 cm | — |
+| Si₃N₄ foil    | Si₃N₄       | diameter = FoilD, thickness = FoilT | z = 0 |
+| He-4 gas tube  | He-4 at GasPres | diameter = PipeD, length = Dist | z = 0 → Dist |
+| Scoring plane  | Si (thin)   | diameter = ScorerD, thickness = 1 µm | z = Dist |
 
-### Physics list: QBBC
+### He-4 gas density
 
-`QBBC` is Geant4's recommended list for ion beams. It includes:
+The gas density is computed from the ideal gas law at 293 K:
 
-| Component                    | Relevance here                              |
-|------------------------------|---------------------------------------------|
-| `G4EmStandardPhysics_option4`| Urban MSC model — best accuracy for ions    |
-| `G4IonPhysics`               | He-3 nuclear interactions                   |
-| `G4IonElasticPhysics`        | Elastic He-3 scattering                     |
-| `G4HadronInelasticQBBC`      | Hadronic inelastic (rare at 6 MeV)          |
+```
+ρ = P × M / (R × T)
+  = GasPres[Torr] × 133.322 [Pa/Torr] × 4.003×10⁻³ [kg/mol]
+    / (8.314 [J/mol·K] × 293.15 [K])
+```
 
-The Urban multiple-scattering model correctly handles the
-**non-Gaussian tails** (large-angle Rutherford scatters) that
-contribute to the halo beyond the core Gaussian.
+At 5 Torr: ρ ≈ 1.09×10⁻⁶ g/cm³. The gas material is built from the
+NIST `G4_He` base (which carries full stopping power tables) scaled to
+this density using `G4NistManager::BuildMaterialWithNewDensity`.
 
-### Step limiter
+### Physics list
 
-`/run/setCut 0.01 mm` ensures the MSC angular deflection is sampled
-in sub-steps through the 1 µm window.  Without this, a single step
-spanning the entire foil would under-sample the scattering.
+`QGSP_BIC` + `G4EmStandardPhysics_option4`:
 
-### Production cut
+| Component                     | Relevance                                  |
+|-------------------------------|--------------------------------------------|
+| `G4EmStandardPhysics_option4` | Urban MSC — best accuracy for ions         |
+| `G4IonPhysics`                | He-3 nuclear interactions                  |
+| `G4IonElasticPhysics`         | Elastic He-3 scattering                    |
+| `G4HadronPhysicsQGSP_BIC`     | Hadronic inelastic                         |
+| `G4StepLimiterPhysics`        | Enforces max step in gas volume            |
 
-The default 0.01 mm production cut suppresses delta-ray production in
-the thin foil, keeping the simulation fast while preserving accuracy
-for the primary He-3 track.
+### Step limiter in gas
+
+A `G4UserLimits` max step of `Dist/500` is applied inside the He-4 gas
+volume. Without this, Geant4 takes a single giant step through the
+low-density gas and the energy loss rounds to zero.
+
+---
+
+## Geometry sanity checks
+
+The simulation prints warnings at startup if:
+- `BeamD > FoilD` — beam extends beyond the foil (produces a hollow ring)
+- `PipeD < BeamD` — gas tube is narrower than the beam
 
 ---
 
 ## Tuning suggestions
 
-| Goal | Change |
-|------|--------|
-| Higher accuracy | Use `G4EmStandardPhysics_option4` explicitly, add `G4UrbanMscModel` parameters |
-| Faster run | Reduce events to 10 000 (statistics still good for σ) |
-| Thicker window | Change `windowHz` in `DetectorConstruction.cc` |
-| Different energy | Change `SetParticleEnergy` in `PrimaryGeneratorAction.cc` |
-| Proton beam | Change ion definition to `Z=1, A=1` |
-| Different drift | Change `driftLen` in `DetectorConstruction.cc` |
-| Divergent beam | Add angular spread in `PrimaryGeneratorAction.cc` |
+| Goal | Change in `sim.conf` |
+|------|----------------------|
+| Different beam size | `BeamD` |
+| Thicker/thinner foil | `FoilT` (µm) |
+| Higher gas pressure | `GasPres` (Torr) |
+| Longer drift | `Dist` (mm) |
+| Wider scorer | `ScorerD` (mm) |
+| Narrower gas pipe | `PipeD` (mm) |
