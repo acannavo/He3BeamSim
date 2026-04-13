@@ -1,0 +1,7 @@
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 1
+/run/setCut 0.01 mm
+/process/eLoss/minKinEnergy 1 keV
+/run/initialize
+/run/beamOn 1

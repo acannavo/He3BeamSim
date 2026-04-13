@@ -1,0 +1,13 @@
+/run/initialize
+/vis/open OGL
+/vis/drawVolume
+/vis/viewer/set/viewpointThetaPhi 80 20
+/vis/viewer/zoom 1.4
+/vis/geometry/set/visibility World 0 false
+/vis/scene/add/trajectories smooth
+/vis/modeling/trajectories/create/drawByParticleID
+/vis/modeling/trajectories/drawByParticleID-0/set He3 red
+/vis/scene/endOfEventAction accumulate 200
+/run/beamOn 200
+/vis/viewer/flush
+/ui/session
