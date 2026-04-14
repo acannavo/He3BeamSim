@@ -39,7 +39,7 @@ void RunAction::RecordHit(G4double x, G4double y, G4double ekin)
 
 void RunAction::RecordDeltaE(G4double dE)
 {
-    G4cout << "DeltaE (keV): " << dE/keV << G4endl;
+    //G4cout << "DeltaE (keV): " << dE/keV << G4endl;
 }
 
 void RunAction::EndOfRunAction(const G4Run* run)

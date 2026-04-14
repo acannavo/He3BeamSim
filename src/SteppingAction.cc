@@ -37,7 +37,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
             G4double ekin = step->GetPostStepPoint()->GetKineticEnergy();
             fEventAction->SetEInGas(ekin);
 
-            G4cout << ">>> ENTER GAS, E = " << ekin/MeV << " MeV\n";
+            // G4cout << ">>> ENTER GAS, E = " << ekin/MeV << " MeV\n";
         }
 
         // --- EXIT from gas ---
@@ -45,7 +45,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
             G4double ekin = step->GetPreStepPoint()->GetKineticEnergy();
             fEventAction->SetEOutGas(ekin);
 
-            G4cout << "<<< EXIT GAS, E = " << ekin/MeV << " MeV\n";
+            // G4cout << "<<< EXIT GAS, E = " << ekin/MeV << " MeV\n";
         }
     }
     // =========================================================
